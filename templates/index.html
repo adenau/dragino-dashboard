@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dragino Temperature Sensor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card h2 {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .value {
+            font-size: 42px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .unit {
+            font-size: 24px;
+            color: #999;
+        }
+        
+        .timestamp {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+        
+        .temp { color: #e74c3c; }
+        .humidity { color: #3498db; }
+        .battery { color: #2ecc71; }
+        
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            position: relative;
+        }
+        
+        canvas {
+            max-width: 100%;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 18px;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            background: #5568d3;
+        }
+        
+        .refresh-info {
+            font-size: 12px;
+            color: #999;
+            margin-top: 10px;
+        }
+        
+        .date-filter {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .date-filter label {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .date-filter input[type="date"] {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .date-filter input[type="date"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .quick-select {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .quick-select button {
+            margin: 0;
+            padding: 8px 15px;
+            font-size: 13px;
+        }
+        
+        .quick-select button.active {
+            background: #2ecc71;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌡️ Dragino Temperature Sensor Dashboard</h1>
+            <p class="subtitle">Real-time monitoring of LoRaWAN temperature sensor</p>
+            <button onclick="refreshData()">🔄 Refresh Data</button>
+            <button onclick="collectNewData()">📥 Collect New Data</button>
+            <p class="refresh-info">Auto-refresh every 5 minutes</p>
+        </header>
+        
+        <div id="error-container"></div>
+        
+        <div class="grid">
+            <div class="card">
+                <h2>Temperature (SHT)</h2>
+                <div class="value temp">
+                    <span id="temp-sht">--</span><span class="unit">°C</span>
+                </div>
+                <div class="timestamp" id="temp-timestamp">--</div>
+            </div>
+            
+            <div class="card">
+                <h2>Humidity</h2>
+                <div class="value humidity">
+                    <span id="humidity">--</span><span class="unit">%</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Battery</h2>
+                <div class="value battery">
+                    <span id="battery">--</span><span class="unit">V</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Signal Quality</h2>
+                <div style="font-size: 16px; margin-top: 10px;">
+                    <div>RSSI: <strong id="rssi">--</strong> dBm</div>
+                    <div style="margin-top: 5px;">SNR: <strong id="snr">--</strong> dB</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chart-card">
+            <h2>Temperature History</h2>
+            <div class="date-filter">
+                <div class="quick-select">
+                    <button onclick="setDateRange(1)">24h</button>
+                    <button onclick="setDateRange(3)">3d</button>
+                    <button onclick="setDateRange(7)" class="active" id="quick-7d">7d</button>
+                    <button onclick="setDateRange(14)">14d</button>
+                    <button onclick="setDateRange(30)">30d</button>
+                </div>
+                <label>From:</label>
+                <input type="date" id="start-date" onchange="updateChartWithCustomRange()">
+                <label>To:</label>
+                <input type="date" id="end-date" onchange="updateChartWithCustomRange()">
+            </div>
+            <div class="chart-container">
+                <canvas id="tempChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-card">
+            <h2>Statistics</h2>
+            <div class="stats-grid" id="statistics">
+                <div class="loading">Loading statistics...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let tempChart = null;
+        
+        async function fetchData(endpoint) {
+            const response = await fetch(endpoint);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        }
+        
+        function showError(message) {
+            const container = document.getElementById('error-container');
+            container.innerHTML = `<div class="error">⚠️ ${message}</div>`;
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
+        
+        async function updateCurrent() {
+            try {
+                const data = await fetchData('/api/current');
+                if (data.success && data.data) {
+                    const reading = data.data;
+                    document.getElementById('temp-sht').textContent = reading.temp_sht?.toFixed(2) || '--';
+                    document.getElementById('humidity').textContent = reading.humidity?.toFixed(1) || '--';
+                    document.getElementById('battery').textContent = reading.battery_voltage?.toFixed(2) || '--';
+                    document.getElementById('rssi').textContent = reading.rssi || '--';
+                    document.getElementById('snr').textContent = reading.snr?.toFixed(1) || '--';
+                    
+                    const timestamp = new Date(reading.received_at);
+                    document.getElementById('temp-timestamp').textContent = 
+                        `Last updated: ${timestamp.toLocaleString()}`;
+                }
+            } catch (error) {
+                console.error('Error updating current data:', error);
+                showError('Failed to fetch current data');
+            }
+        }
+        
+        let currentDays = 7; // Default to 7 days
+        
+        function setDateRange(days) {
+            currentDays = days;
+            
+            // Update active button
+            document.querySelectorAll('.quick-select button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Clear custom date inputs
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
+            
+            updateChart();
+        }
+        
+        function updateChartWithCustomRange() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+            
+            if (startDate && endDate) {
+                // Clear active quick select buttons
+                document.querySelectorAll('.quick-select button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                updateChart(startDate, endDate);
+            }
+        }
+        
+        async function updateChart(startDate = null, endDate = null) {
+            try {
+                let data;
+                
+                if (startDate && endDate) {
+                    // Custom date range
+                    const start = new Date(startDate).toISOString();
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59, 999);
+                    const endISO = end.toISOString();
+                    
+                    data = await fetchData(`/api/range/${start}/${endISO}`);
+                } else {
+                    // Quick select (days)
+                    const hours = currentDays * 24;
+                    data = await fetchData(`/api/history/${hours}`);
+                }
+                
+                if (data.success && data.data.length > 0) {
+                    const readings = data.data;
+                    
+                    const labels = readings.map(r => {
+                        const date = new Date(r.received_at);
+                        return date.toLocaleString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        });
+                    });
+                    
+                    const temps = readings.map(r => r.temp_sht);
+                    const humidity = readings.map(r => r.humidity);
+                    
+                    const ctx = document.getElementById('tempChart').getContext('2d');
+                    
+                    if (tempChart) {
+                        tempChart.destroy();
+                    }
+                    
+                    tempChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Temperature (°C)',
+                                    data: temps,
+                                    borderColor: '#e74c3c',
+                                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                                    tension: 0.4,
+                                    yAxisID: 'y'
+                                },
+                                {
+                                    label: 'Humidity (%)',
+                                    data: humidity,
+                                    borderColor: '#3498db',
+                                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                    tension: 0.4,
+                                    yAxisID: 'y1'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            },
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Temperature (°C)'
+                                    }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Humidity (%)'
+                                    },
+                                    grid: {
+                                        drawOnChartArea: false,
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error updating chart:', error);
+                showError('Failed to fetch historical data');
+            }
+        }
+        
+        async function updateStatistics() {
+            try {
+                const data = await fetchData('/api/statistics');
+                if (data.success && data.data) {
+                    const stats = data.data;
+                    const container = document.getElementById('statistics');
+                    
+                    container.innerHTML = `
+                        <div class="stat-item">
+                            <div class="stat-label">Total Readings</div>
+                            <div class="stat-value">${stats.total_readings || 0}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Avg Temperature</div>
+                            <div class="stat-value">${stats.avg_temp_sht?.toFixed(1) || '--'}°C</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Min Temperature</div>
+                            <div class="stat-value">${stats.min_temp_sht?.toFixed(1) || '--'}°C</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Max Temperature</div>
+                            <div class="stat-value">${stats.max_temp_sht?.toFixed(1) || '--'}°C</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Avg Humidity</div>
+                            <div class="stat-value">${stats.avg_humidity?.toFixed(1) || '--'}%</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Avg Battery</div>
+                            <div class="stat-value">${stats.avg_battery?.toFixed(2) || '--'}V</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error updating statistics:', error);
+            }
+        }
+        
+        async function refreshData() {
+            await Promise.all([
+                updateCurrent(),
+                updateChart(),
+                updateStatistics()
+            ]);
+        }
+        
+        async function collectNewData() {
+            try {
+                showError('Collecting new data from API...');
+                const data = await fetchData('/api/collect');
+                if (data.success) {
+                    showError(`✅ Collected ${data.data.stored} new readings`);
+                    await refreshData();
+                }
+            } catch (error) {
+                console.error('Error collecting data:', error);
+                showError('Failed to collect new data');
+            }
+        }
+        
+        // Initialize date inputs
+        function initializeDates() {
+            const today = new Date();
+            const sevenDaysAgo = new Date(today.getTime() - (7 * 24 * 60 * 60 * 1000));
+            
+            document.getElementById('end-date').value = today.toISOString().split('T')[0];
+            document.getElementById('start-date').value = sevenDaysAgo.toISOString().split('T')[0];
+        }
+        
+        // Initial load
+        initializeDates();
+        refreshData();
+        
+        // Auto-refresh every 5 minutes
+        setInterval(refreshData, 300000);
+    </script>
+</body>
+</html>
