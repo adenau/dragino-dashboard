@@ -17,11 +17,11 @@ A Python application that collects, stores, and displays temperature data from a
 
 ```bash
 # Create virtual environment
-python3 -m venv venv
+python3 -m venv .venv
 
 # Activate virtual environment
 # On Linux/Mac:
-source venv/bin/activate
+source .venv/bin/activate
 # On Windows:
 # venv\Scripts\activate
 ```

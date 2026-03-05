@@ -59,6 +59,15 @@ class SensorDataCollector:
                         continue
             
             return readings
+        except requests.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code in {401, 403}:
+                print(
+                    "Authentication/authorization failed while fetching TTN data "
+                    f"(HTTP {status_code}). Verify DRAGINO_API_URL app id, token, and token rights."
+                )
+            print(f"Error fetching data from API: {e}")
+            return []
             
         except requests.RequestException as e:
             print(f"Error fetching data from API: {e}")

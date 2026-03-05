@@ -18,7 +18,8 @@ COPY . .
 RUN mkdir -p /app/instance
 
 ENV DRAGINO_ENV=prod
+ENV DRAGINO_WEB_PORT=5000
 
 EXPOSE 5000
 
-CMD ["sh", "-c", "alembic upgrade head && gunicorn -c gunicorn.conf.py --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 120 web_server:app"]
+CMD ["sh", "-c", "alembic upgrade head && gunicorn -c gunicorn.conf.py --bind 0.0.0.0:${DRAGINO_WEB_PORT:-5000} --workers 2 --threads 4 --timeout 120 web_server:app"]
