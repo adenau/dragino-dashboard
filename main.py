@@ -6,10 +6,10 @@ This script orchestrates the data collection and web server components.
 import argparse
 
 import config
+from app import create_app
 from database import SensorDatabase
 from collector import SensorDataCollector
 from collector_runtime import start_background_collector_thread
-from web_server import app
 
 
 def main():
@@ -40,37 +40,41 @@ def main():
     
     args = parser.parse_args()
     
-    # Initialize database
-    print("Initializing database...")
-    db = SensorDatabase()
-    print(f"Database ready: {config.DATABASE_PATH}")
-    
-    # Collect-only mode
-    if args.collect_only:
-        print("\n=== Collection Mode ===")
-        collector = SensorDataCollector(database=db)
-        result = collector.collect_and_store()
-        print(f"\nResults:")
-        print(f"  Fetched: {result['fetched']}")
-        print(f"  Stored: {result['stored']}")
-        print(f"  Duplicates: {result['duplicates']}")
-        
-        # Show statistics
-        stats = db.get_statistics(config.DEVICE_ID)
-        print(f"\nDatabase Statistics:")
-        print(f"  Total Readings: {stats['total_readings']}")
-        print(f"  First Reading: {stats['first_reading']}")
-        print(f"  Last Reading: {stats['last_reading']}")
-        if stats['avg_temp_sht']:
-            print(f"  Avg Temperature: {stats['avg_temp_sht']}°C")
-        return
-    
-    # Initial data fetch
-    if args.initial_fetch:
-        print("\n=== Initial Data Fetch ===")
-        collector = SensorDataCollector(database=db)
-        result = collector.collect_and_store()
-        print(f"Fetched {result['stored']} readings")
+    app = create_app()
+
+    with app.app_context():
+        # Initialize database
+        print("Initializing database...")
+        db = SensorDatabase(app=app)
+        db.init_database()
+        print(f"Database ready: {config.DATABASE_PATH}")
+
+        # Collect-only mode
+        if args.collect_only:
+            print("\n=== Collection Mode ===")
+            collector = SensorDataCollector(database=db)
+            result = collector.collect_and_store()
+            print(f"\nResults:")
+            print(f"  Fetched: {result['fetched']}")
+            print(f"  Stored: {result['stored']}")
+            print(f"  Duplicates: {result['duplicates']}")
+
+            # Show statistics
+            stats = db.get_statistics(config.DEVICE_ID)
+            print(f"\nDatabase Statistics:")
+            print(f"  Total Readings: {stats['total_readings']}")
+            print(f"  First Reading: {stats['first_reading']}")
+            print(f"  Last Reading: {stats['last_reading']}")
+            if stats['avg_temp_sht']:
+                print(f"  Avg Temperature: {stats['avg_temp_sht']}°C")
+            return
+
+        # Initial data fetch
+        if args.initial_fetch:
+            print("\n=== Initial Data Fetch ===")
+            collector = SensorDataCollector(database=db)
+            result = collector.collect_and_store()
+            print(f"Fetched {result['stored']} readings")
     
     # Start background collector thread
     if not args.no_background:

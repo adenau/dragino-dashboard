@@ -3,6 +3,7 @@ import threading
 import time
 from datetime import datetime
 
+from app import create_app
 import config
 from collector import SensorDataCollector
 
@@ -14,19 +15,22 @@ _collector_lock = threading.Lock()
 def background_collector_loop(interval: int | None = None) -> None:
     """Background thread that periodically collects data from the API."""
     run_interval = interval if interval is not None else config.COLLECTION_INTERVAL
-    collector = SensorDataCollector()
+    app = create_app()
 
-    print(f"Background collector started (interval: {run_interval}s)")
+    with app.app_context():
+        collector = SensorDataCollector()
 
-    while True:
-        try:
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting data collection...")
-            result = collector.collect_and_store(lookback_hours=2)
-            print(f"Collected: {result['stored']} new, {result['duplicates']} duplicates")
-        except Exception as error:
-            print(f"Error in background collector: {error}")
+        print(f"Background collector started (interval: {run_interval}s)")
 
-        time.sleep(run_interval)
+        while True:
+            try:
+                print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting data collection...")
+                result = collector.collect_and_store(lookback_hours=2)
+                print(f"Collected: {result['stored']} new, {result['duplicates']} duplicates")
+            except Exception as error:
+                print(f"Error in background collector: {error}")
+
+            time.sleep(run_interval)
 
 
 def start_background_collector_thread(interval: int | None = None) -> None:

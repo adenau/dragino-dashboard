@@ -7,6 +7,7 @@ services:
     ports:
       - "${DRAGINO_WEB_PORT:-5000}:${DRAGINO_WEB_PORT:-5000}"
     environment:
+      FLASK_APP: app.py
       DRAGINO_ENV: prod
       DRAGINO_DATABASE_BACKEND: mysql
       DRAGINO_MYSQL_HOST: mysql

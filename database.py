@@ -1,42 +1,41 @@
-"""Database module for storing sensor data using SQLAlchemy."""
+"""Database models and data-access helpers for sensor data."""
+from contextlib import nullcontext
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, UniqueConstraint
-from sqlalchemy import and_, create_engine, desc, func, select
+from flask import has_app_context
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
-
-import config
 
 
-class Base(DeclarativeBase):
-    pass
+db = SQLAlchemy()
 
 
-class SensorReading(Base):
+class SensorReading(db.Model):
     __tablename__ = "sensor_readings"
     __table_args__ = (
-        UniqueConstraint("device_id", "received_at", "f_cnt"),
+        db.UniqueConstraint(
+            "device_id",
+            "received_at",
+            "f_cnt",
+            name="uq_sensor_readings_device_received_fcnt",
+        ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    device_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    received_at: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    temp_sht: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    temp_ds: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    humidity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    battery_voltage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    battery_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    f_cnt: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    rssi: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    snr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    raw_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
-        nullable=False,
-    )
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    device_id = db.Column(db.String(255), nullable=False, index=True)
+    received_at = db.Column(db.String(64), nullable=False, index=True)
+    temp_sht = db.Column(db.Float, nullable=True)
+    temp_ds = db.Column(db.Float, nullable=True)
+    humidity = db.Column(db.Float, nullable=True)
+    battery_voltage = db.Column(db.Float, nullable=True)
+    battery_status = db.Column(db.Integer, nullable=True)
+    f_cnt = db.Column(db.Integer, nullable=True)
+    rssi = db.Column(db.Integer, nullable=True)
+    snr = db.Column(db.Float, nullable=True)
+    raw_data = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def to_dict(self) -> Dict:
         created_at = (
@@ -60,24 +59,27 @@ class SensorReading(Base):
 
 
 class SensorDatabase:
-    """Handles all database operations for sensor data"""
+    """Handles all database operations for sensor data."""
 
-    def __init__(self, database_url: Optional[str] = None):
-        self.database_url = database_url or config.DATABASE_URL
-        self.engine = create_engine(self.database_url, pool_pre_ping=True)
-        self.init_database()
+    def __init__(self, app=None):
+        self.app = app
 
-    def init_database(self):
-        """Initialize the database and create tables if they don't exist"""
-        Base.metadata.create_all(self.engine)
+    def _context(self):
+        if has_app_context():
+            return nullcontext()
+        if self.app is None:
+            raise RuntimeError("SensorDatabase requires a Flask app context or app instance.")
+        return self.app.app_context()
+
+    def init_database(self) -> None:
+        """Initialize the database and create tables if they don't exist."""
+        with self._context():
+            db.create_all()
 
     def insert_reading(self, reading_data: Dict) -> bool:
-        """
-        Insert a sensor reading into the database
-        Returns True if inserted, False if duplicate
-        """
-        try:
-            with Session(self.engine) as session:
+        """Insert a sensor reading. Returns True if inserted, False if duplicate."""
+        with self._context():
+            try:
                 reading = SensorReading(
                     device_id=reading_data.get("device_id"),
                     received_at=reading_data.get("received_at"),
@@ -91,23 +93,22 @@ class SensorDatabase:
                     snr=reading_data.get("snr"),
                     raw_data=reading_data.get("raw_data", ""),
                 )
-                session.add(reading)
-                session.commit()
-            return True
-
-        except IntegrityError:
-            # Duplicate entry, skip
-            return False
+                db.session.add(reading)
+                db.session.commit()
+                return True
+            except IntegrityError:
+                db.session.rollback()
+                return False
 
     def get_latest_readings(self, device_id: Optional[str] = None, limit: int = 100) -> List[Dict]:
-        """Get the latest sensor readings"""
-        with Session(self.engine) as session:
+        """Get the latest sensor readings."""
+        with self._context():
             query = select(SensorReading)
             if device_id:
                 query = query.where(SensorReading.device_id == device_id)
 
             query = query.order_by(desc(SensorReading.received_at)).limit(limit)
-            rows = session.scalars(query).all()
+            rows = db.session.execute(query).scalars().all()
             return [row.to_dict() for row in rows]
 
     def get_readings_by_timerange(
@@ -116,8 +117,8 @@ class SensorDatabase:
         end_time: str,
         device_id: Optional[str] = None,
     ) -> List[Dict]:
-        """Get sensor readings within a time range"""
-        with Session(self.engine) as session:
+        """Get sensor readings within a time range."""
+        with self._context():
             filters = [SensorReading.received_at.between(start_time, end_time)]
             if device_id:
                 filters.append(SensorReading.device_id == device_id)
@@ -127,12 +128,12 @@ class SensorDatabase:
                 .where(and_(*filters))
                 .order_by(SensorReading.received_at.asc())
             )
-            rows = session.scalars(query).all()
+            rows = db.session.execute(query).scalars().all()
             return [row.to_dict() for row in rows]
 
     def get_statistics(self, device_id: Optional[str] = None) -> Dict:
-        """Get statistics about stored sensor data"""
-        with Session(self.engine) as session:
+        """Get statistics about stored sensor data."""
+        with self._context():
             query = select(
                 func.count(SensorReading.id),
                 func.min(SensorReading.received_at),
@@ -147,7 +148,7 @@ class SensorDatabase:
             if device_id:
                 query = query.where(SensorReading.device_id == device_id)
 
-            row = session.execute(query).one()
+            row = db.session.execute(query).one()
             return {
                 "total_readings": row[0],
                 "first_reading": row[1],

@@ -153,16 +153,20 @@ class SensorDataCollector:
 
 
 if __name__ == '__main__':
-    # Test the collector
-    collector = SensorDataCollector()
-    result = collector.collect_and_store()
-    print(f"\nCollection Results: {result}")
-    
-    # Show latest reading
-    latest = collector.get_current_temperature()
-    if latest:
-        print(f"\nLatest Reading:")
-        print(f"  Time: {latest['received_at']}")
-        print(f"  Temperature (SHT): {latest['temp_sht']}°C")
-        print(f"  Humidity: {latest['humidity']}%")
-        print(f"  Battery: {latest['battery_voltage']}V")
+    from app import create_app
+
+    app = create_app()
+    with app.app_context():
+        # Test the collector
+        collector = SensorDataCollector()
+        result = collector.collect_and_store()
+        print(f"\nCollection Results: {result}")
+
+        # Show latest reading
+        latest = collector.get_current_temperature()
+        if latest:
+            print(f"\nLatest Reading:")
+            print(f"  Time: {latest['received_at']}")
+            print(f"  Temperature (SHT): {latest['temp_sht']}°C")
+            print(f"  Humidity: {latest['humidity']}%")
+            print(f"  Battery: {latest['battery_voltage']}V")

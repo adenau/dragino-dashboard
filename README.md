@@ -72,8 +72,8 @@ python main.py --port 8080
 # Test data collector
 python collector.py
 
-# Test web server only
-python web_server.py
+# Test web server only (Flask app factory entrypoint)
+flask --app app run --host 0.0.0.0 --port 5000
 ```
 
 ## Docker
@@ -96,7 +96,7 @@ Use Docker Compose (MySQL sample):
 docker compose up -d --build
 ```
 
-Container startup runs `alembic upgrade head` before starting Gunicorn.
+Container startup runs `flask db upgrade` before starting Gunicorn.
 
 ## Configuration
 
@@ -156,11 +156,11 @@ The data layer uses SQLAlchemy. Backend selection:
 
 ## Migrations
 
-Schema migrations are managed with Alembic.
+Schema migrations are managed with Flask-Migrate (Alembic backend).
 
 ```bash
 # Apply latest migrations
-alembic upgrade head
+flask --app app db upgrade
 ```
 
 In Docker, migrations are automatically applied on container startup.
@@ -169,10 +169,11 @@ In Docker, migrations are automatically applied on container startup.
 
 ```
 dragino_dashboard/
+├── app.py               # Flask application factory and WSGI entrypoint
 ├── main.py              # Main application entry point
 ├── collector.py         # Data collection from API
-├── database.py          # Database operations
-├── web_server.py        # Flask web server
+├── database.py          # Flask-SQLAlchemy models and DB access helpers
+├── web_server.py        # Compatibility shim exporting app
 ├── config.py            # Environment-backed configuration
 ├── .env.example         # Example environment settings
 ├── Dockerfile           # Container build definition
